@@ -1,0 +1,94 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Broches
+const int PIN_POT    = A0;
+const int LED_VERTE  = 2;
+const int LED_JAUNE  = 3;
+const int LED_ROUGE  = 4;
+const int BUZZER     = 5;
+const int BTN_HOLD   = 6;
+
+// Paramètres
+const float VREF = 5.0;           // tension de référence de l'Arduino
+const float SEUIL_BAS  = 2.0;     // en dessous : vert
+const float SEUIL_HAUT = 4.0;     // au-dessus : rouge + buzzer
+
+// Variables
+bool hold = false;
+float tension = 0.0;
+bool dernierEtatBtn = HIGH;
+unsigned long dernierRebond = 0;
+unsigned long dernierAffichage = 0;
+
+float lireTension() {
+  long somme = 0;
+  for (int i = 0; i < 10; i++) {     // moyenne de 10 lectures pour stabiliser
+    somme += analogRead(PIN_POT);
+  }
+  float valeur = somme / 10.0;
+  return valeur * VREF / 1023.0;
+}
+
+void gererBouton() {
+  bool etat = digitalRead(BTN_HOLD);
+  if (etat != dernierEtatBtn && millis() - dernierRebond > 50) {
+    dernierRebond = millis();
+    if (etat == LOW) {               // appui détecté
+      hold = !hold;                  // on bascule HOLD / mesure en direct
+      tone(BUZZER, 2000, 100);       // petit bip de confirmation
+    }
+  }
+  dernierEtatBtn = etat;
+}
+
+void majSignalisation(float v) {
+  digitalWrite(LED_VERTE, v < SEUIL_BAS);
+  digitalWrite(LED_JAUNE, v >= SEUIL_BAS && v <= SEUIL_HAUT);
+  digitalWrite(LED_ROUGE, v > SEUIL_HAUT);
+
+  if (v > SEUIL_HAUT) {
+    tone(BUZZER, 1000);              // alarme : tension trop élevée
+  } else if (millis() - dernierRebond > 150) {
+    noTone(BUZZER);
+  }
+}
+
+void setup() {
+  pinMode(LED_VERTE, OUTPUT);
+  pinMode(LED_JAUNE, OUTPUT);
+  pinMode(LED_ROUGE, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
+  pinMode(BTN_HOLD, INPUT_PULLUP);   // bouton relié à GND
+
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("Voltmetre num.");
+  delay(1500);
+  lcd.clear();
+}
+
+void loop() {
+  gererBouton();
+
+  if (!hold) {
+    tension = lireTension();         // mesure en direct
+  }                                  // sinon on garde la dernière valeur
+
+  if (millis() - dernierAffichage > 200) {
+    dernierAffichage = millis();
+
+    lcd.setCursor(0, 0);
+    lcd.print("U = ");
+    lcd.print(tension, 2);
+    lcd.print(" V    ");
+
+    lcd.setCursor(0, 1);
+    lcd.print(hold ? "Mode : HOLD    " : "Mode : LIVE    ");
+  }
+
+  majSignalisation(tension);
+}
