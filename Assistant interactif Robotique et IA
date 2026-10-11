@@ -1,0 +1,133 @@
+#include <LiquidCrystal.h>
+#include <Servo.h>
+
+// --- Broches ---
+const int PIN_ROUGE  = 22;
+const int PIN_VERTE  = 23;
+const int PIN_JAUNE  = 24;
+const int PIN_BUZZER = 8;
+const int PIN_SERVO  = 9;
+const int PIN_BOUTON = 7;
+
+// LCD : RS, E, D4, D5, D6, D7
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+Servo monServo;
+
+// --- États ---
+bool etatRouge = false, etatVerte = false, etatJaune = false;
+bool buzzerActif = false;
+int angleServo = 0;
+
+// Anti-rebond du bouton
+bool dernierEtatBouton = HIGH;
+unsigned long dernierChangement = 0;
+
+// ---------- Affichage ----------
+void afficher(String ligne1, String ligne2) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(ligne1.substring(0, 16));
+  lcd.setCursor(0, 1);
+  lcd.print(ligne2.substring(0, 16));
+}
+
+void confirmer(String message) {
+  Serial.println(message);
+  afficher(message, "OK");
+}
+
+// ---------- Actions ----------
+void setLed(int pin, bool &etat, bool valeur, String nom) {
+  etat = valeur;
+  digitalWrite(pin, valeur ? HIGH : LOW);
+  confirmer(nom + (valeur ? " ON" : " OFF"));
+}
+
+void setBuzzer(bool valeur) {
+  buzzerActif = valeur;
+  if (valeur) tone(PIN_BUZZER, 1000);
+  else        noTone(PIN_BUZZER);
+  confirmer(valeur ? "Buzzer ON" : "Buzzer OFF");
+}
+
+void setServo(int angle) {
+  angleServo = angle;
+  monServo.write(angle);
+  confirmer("Servo " + String(angle) + " deg");
+}
+
+void toutEteindre() {
+  etatRouge = etatVerte = etatJaune = false;
+  digitalWrite(PIN_ROUGE, LOW);
+  digitalWrite(PIN_VERTE, LOW);
+  digitalWrite(PIN_JAUNE, LOW);
+  buzzerActif = false;
+  noTone(PIN_BUZZER);
+  confirmer("Tout eteint");
+}
+
+// ---------- Traitement des commandes ----------
+void traiterCommande(String cmd) {
+  cmd.trim();
+  cmd.toUpperCase();
+  if (cmd.length() == 0) return;
+
+  if      (cmd == "ROUGE ON")  setLed(PIN_ROUGE, etatRouge, true,  "LED rouge");
+  else if (cmd == "ROUGE OFF") setLed(PIN_ROUGE, etatRouge, false, "LED rouge");
+  else if (cmd == "VERTE ON")  setLed(PIN_VERTE, etatVerte, true,  "LED verte");
+  else if (cmd == "VERTE OFF") setLed(PIN_VERTE, etatVerte, false, "LED verte");
+  else if (cmd == "JAUNE ON")  setLed(PIN_JAUNE, etatJaune, true,  "LED jaune");
+  else if (cmd == "JAUNE OFF") setLed(PIN_JAUNE, etatJaune, false, "LED jaune");
+  else if (cmd == "SERVO 0")   setServo(0);
+  else if (cmd == "SERVO 90")  setServo(90);
+  else if (cmd == "SERVO 180") setServo(180);
+  else if (cmd == "BUZZER ON") setBuzzer(true);
+  else if (cmd == "BUZZER OFF")setBuzzer(false);
+  else if (cmd == "AIDE")      afficher("ROUGE/VERTE/JAUNE", "SERVO BUZZER");
+  else {
+    Serial.println("Commande inconnue : " + cmd);
+    afficher("Commande inconnue", cmd);
+  }
+}
+
+// ---------- Setup ----------
+void setup() {
+  Serial.begin(9600);
+  Serial.setTimeout(100);
+
+  pinMode(PIN_ROUGE, OUTPUT);
+  pinMode(PIN_VERTE, OUTPUT);
+  pinMode(PIN_JAUNE, OUTPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+  pinMode(PIN_BOUTON, INPUT_PULLUP);
+
+  monServo.attach(PIN_SERVO);
+  monServo.write(0);
+
+  lcd.begin(16, 2);
+  afficher("Assistant pret", "Tapez AIDE");
+
+  Serial.println("=== Assistant pret ===");
+  Serial.println("Commandes : ROUGE/VERTE/JAUNE ON|OFF");
+  Serial.println("            SERVO 0|90|180");
+  Serial.println("            BUZZER ON|OFF");
+}
+
+// ---------- Boucle principale ----------
+void loop() {
+  // 1) Commandes du moniteur série
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    traiterCommande(cmd);
+  }
+
+  // 2) Bouton : éteint LED + buzzer (avec anti-rebond)
+  bool etatBouton = digitalRead(PIN_BOUTON);
+  if (etatBouton != dernierEtatBouton && millis() - dernierChangement > 50) {
+    dernierChangement = millis();
+    dernierEtatBouton = etatBouton;
+    if (etatBouton == LOW) {   // bouton appuyé
+      toutEteindre();
+    }
+  }
+}
