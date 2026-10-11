@@ -29,7 +29,7 @@ Puis il y a une signalisation pour indiquer l'etat de danger du tension qui trav
 			U < 2 V : LED verte (normal) ;
 			2 V ≤ U ≤ 4 V : LED jaune (à surveiller) ;
 			U > 4 V : LED rouge et buzzer continu (danger).
-lE bouton HOLD permet un appui qui fige la valeur affichée (mode HOLD) et un bip confirme l'action et un second appui reprend la mesure en direct.
+Le bouton HOLD permet un appui qui fige la valeur affichée (mode HOLD) et un bip confirme l'action et un second appui reprend la mesure en direct.
 
 ## Résultat obtenu
 
